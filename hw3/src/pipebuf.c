@@ -43,6 +43,7 @@ static ssize_t pipebuf_read(struct file *file, char __user *buf, size_t len, lof
             return ret;
         }
 
+        unsigned int local_copied = 0;
         while (1)
         {
 
@@ -62,12 +63,13 @@ static ssize_t pipebuf_read(struct file *file, char __user *buf, size_t len, lof
             }
 
             total_copied += copied;
+            local_copied += copied;
         }
 
-        wake_up_interruptible(&pipebuf_ctx.writeq);
+        if (local_copied)
+            wake_up_interruptible(&pipebuf_ctx.writeq);
 
-        if (atomic_read(&pipebuf_ctx.writers_open) == 0)
-        {
+        if (atomic_read(&pipebuf_ctx.writers_open) == 0){
             break;
         }
     }
@@ -87,7 +89,6 @@ static ssize_t pipebuf_write(struct file *file,
 
     while (total_copied < count)
     {
-        // Возможно стоит добавить "|| atomic_read(&pipebuf_ctx.reades_open) == 0"
         ret = wait_event_interruptible(pipebuf_ctx.writeq,
                                        kfifo_avail(&pipebuf_ctx.fifo) > 0);
         if (ret)
@@ -95,13 +96,7 @@ static ssize_t pipebuf_write(struct file *file,
             return ret;
         }
 
-        // spin_lock(&pipebuf_ctx.lock);
-        // ret = kfifo_from_user(&pipebuf_ctx.fifo,
-        //                       buf + total_copied,
-        //                       (unsigned int)count - total_copied,
-        //                       &temp);
-        // spin_unlock(&pipebuf_ctx.lock);
-
+        unsigned int local_copied = 0;
         while (1)
         {
 
@@ -123,9 +118,11 @@ static ssize_t pipebuf_write(struct file *file,
             spin_unlock(&pipebuf_ctx.lock);
 
             total_copied += copied;
+            local_copied += copied;
         }
 
-        wake_up_interruptible(&pipebuf_ctx.readq);
+        if (local_copied)
+            wake_up_interruptible(&pipebuf_ctx.readq);
     }
 
     return copied;
@@ -191,7 +188,7 @@ static int __init pipebuf_init(void)
     init_waitqueue_head(&pipebuf_ctx.readq);
     init_waitqueue_head(&pipebuf_ctx.writeq);
 
-    ret = kfifo_alloc(&pipebuf_ctx.fifo, 1024, GFP_KERNEL);
+    ret = kfifo_alloc(&pipebuf_ctx.fifo, FIFO_LEN, GFP_KERNEL);
     if (ret)
     {
         return ret;
@@ -239,8 +236,6 @@ err_unregister:
 
 static void __exit pipebuf_exit(void)
 {
-    wake_up_all(&pipebuf_ctx.readq);
-    wake_up_all(&pipebuf_ctx.writeq);
     kfifo_free(&pipebuf_ctx.fifo);
 
     device_destroy(pipebuf_class, dev_number);
