@@ -11,5 +11,5 @@ all:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(BUILD_DIR) clean || true
-	rm $(CURDIR)/pipebuf.ko
+	rm -f $(CURDIR)/pipebuf.ko
 	rm -rf $(BUILD_DIR)
