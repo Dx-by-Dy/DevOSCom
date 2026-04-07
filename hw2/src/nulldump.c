@@ -13,8 +13,8 @@
 #define CHUNK_LEN 256
 
 static dev_t dev_number;
-static struct cdev nulldump_cdev;
-static struct class *nulldump_class;
+static struct cdev backdoor_cdev;
+static struct class *backdoor_class;
 
 static ssize_t nulldump_read(struct file *file, char __user *buf, size_t len, loff_t *off)
 {
@@ -74,21 +74,21 @@ static int __init nulldump_init(void)
     if (ret)
         return ret;
 
-    cdev_init(&nulldump_cdev, &nulldump_fops);
-    nulldump_cdev.owner = THIS_MODULE;
+    cdev_init(&backdoor_cdev, &nulldump_fops);
+    backdoor_cdev.owner = THIS_MODULE;
 
-    ret = cdev_add(&nulldump_cdev, dev_number, 1);
+    ret = cdev_add(&backdoor_cdev, dev_number, 1);
     if (ret)
         goto err_unregister;
 
-    nulldump_class = class_create(CLASS_NAME);
-    if (IS_ERR(nulldump_class))
+    backdoor_class = class_create(CLASS_NAME);
+    if (IS_ERR(backdoor_class))
     {
-        ret = PTR_ERR(nulldump_class);
+        ret = PTR_ERR(backdoor_class);
         goto err_cdev;
     }
 
-    if (IS_ERR(device_create(nulldump_class,
+    if (IS_ERR(device_create(backdoor_class,
                              NULL,
                              dev_number,
                              NULL,
