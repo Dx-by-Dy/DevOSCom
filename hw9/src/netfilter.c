@@ -86,6 +86,8 @@ static unsigned int hook_func(void *priv,
 {
     struct iphdr *ip_header;
     struct tcphdr *tcp_header;
+    u16 dport;
+    int i;
 
     if (!skb)
         return NF_ACCEPT;
@@ -101,25 +103,32 @@ static unsigned int hook_func(void *priv,
     if (!tcp_header)
         return NF_ACCEPT;
 
-    if (!(tcp_header->syn && !tcp_header->ack && !tcp_header->rst))
-        return NF_ACCEPT;
+    dport = ntohs(tcp_header->dest);
 
-    int i, ok = 0;
     for (i = 0; i < ports_count; i++)
     {
-        if (ntohs(tcp_header->dest) == ports[i])
+        if (dport == ports[i])
         {
-            ok = 1;
-            break;
+            printk(KERN_INFO "TCP DROP: %pI4:%u -> %pI4:%u\n",
+                   &ip_header->saddr,
+                   ntohs(tcp_header->source),
+                   &ip_header->daddr,
+                   dport);
+
+            return NF_DROP;
         }
     }
 
-    if (!ok)
-        return NF_ACCEPT;
-
-    printk(KERN_INFO "TCP CONNECTION: %pI4:%u -> %pI4:%u\n",
-           &ip_header->saddr, ntohs(tcp_header->source),
-           &ip_header->daddr, ntohs(tcp_header->dest));
+    if (tcp_header->syn &&
+        !tcp_header->ack &&
+        !tcp_header->rst)
+    {
+        printk(KERN_INFO "TCP CONNECTION: %pI4:%u -> %pI4:%u\n",
+               &ip_header->saddr,
+               ntohs(tcp_header->source),
+               &ip_header->daddr,
+               dport);
+    }
 
     return NF_ACCEPT;
 }
